@@ -1,0 +1,148 @@
+.break-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.break-dialog {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.break-dialog h2 {
+  margin: 0 0 1.5rem;
+  color: #333;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.break-type-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.break-type-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.break-type-option:hover {
+  background: #e9ecef;
+}
+
+.break-type-option input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.break-type-option span {
+  font-size: 1rem;
+  color: #333;
+  font-weight: 500;
+}
+
+.duration-selector {
+  margin-bottom: 2rem;
+}
+
+.duration-selector label {
+  display: block;
+  margin-bottom: 1rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.time-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 12px;
+}
+
+.time-picker-column {
+  position: relative;
+  width: 80px;
+}
+
+.time-picker-wheel {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 1.2rem;
+  border: none;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+  text-align: center;
+  color: #333;
+  font-weight: 600;
+}
+
+.time-picker-wheel:focus {
+  outline: none;
+}
+
+.time-picker-separator {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333;
+  padding: 0 0.5rem;
+}
+
+.break-dialog-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.break-dialog-button {
+  flex: 1;
+  padding: 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.break-dialog-button.primary {
+  background: #4CAF50;
+  color: white;
+}
+
+.break-dialog-button.primary:hover {
+  background: #43a047;
+}
+
+.break-dialog-button.secondary {
+  background: #e9ecef;
+  color: #333;
+}
+
+.break-dialog-button.secondary:hover {
+  background: #dee2e6;
+} 
