@@ -14,7 +14,7 @@ interface TimeStats {
 }
 
 interface TimelineEntry {
-  type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end' | 'window_unfocus' | 'inactivity_start' | 'inactivity_end';
+  type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end' | 'inactivity_start' | 'inactivity_end';
   timestamp: Date;
   description?: string;
 }
@@ -145,12 +145,6 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
     setTimeline(prev => [...prev, { type, timestamp: new Date() }]);
   }, []);
 
-  const handleWindowFocus = useCallback((_: any, isFocused: boolean) => {
-    if (!isFocused && isClockedIn) {
-      addTimelineEntry('window_unfocus');
-    }
-  }, [isClockedIn, addTimelineEntry]);
-
   const handleResumeSession = useCallback(() => {
     const inactivityStart = new Date(inactivityStartTime || Date.now());
     const inactivityEnd = new Date();
@@ -201,14 +195,12 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
 
     ipcRenderer.on('activity-status-changed', handleActivityChange);
     ipcRenderer.on('resume-activity', handleResumeFromMain);
-    ipcRenderer.on('window-focus-update', handleWindowFocus);
 
     return () => {
       ipcRenderer.removeListener('activity-status-changed', handleActivityChange);
       ipcRenderer.removeListener('resume-activity', handleResumeFromMain);
-      ipcRenderer.removeListener('window-focus-update', handleWindowFocus);
     };
-  }, [isClockedIn, handleWindowFocus, inactivityStartTime, formatTime, currentState, handleResumeSession]);
+  }, [isClockedIn, inactivityStartTime, formatTime, currentState, handleResumeSession, formatTimeWithSeconds]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
