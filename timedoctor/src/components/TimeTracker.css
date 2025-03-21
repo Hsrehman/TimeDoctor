@@ -204,6 +204,15 @@
   box-shadow: none;
 }
 
+.break-button.end-break {
+  background: #f44336;
+  box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+}
+
+.break-button.end-break:hover {
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+}
+
 .break-timer {
   margin-top: 1rem;
   padding: 0.75rem 1.5rem;
@@ -212,4 +221,17 @@
   border-radius: 50px;
   font-weight: 500;
   display: inline-block;
+}
+
+.stat-item.payable-time {
+  background: #e8f5e9;
+  border: 1px solid #81c784;
+}
+
+.stat-item.payable-time .stat-label {
+  color: #2e7d32;
+}
+
+.stat-item.payable-time .stat-value {
+  color: #1b5e20;
 } 

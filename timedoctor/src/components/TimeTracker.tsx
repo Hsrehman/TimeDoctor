@@ -8,6 +8,7 @@ interface TimeStats {
   officeBreakTime: number;
   inactiveTime: number;
   sessionTime: number;
+  payableTime: number;
 }
 
 interface TimelineEntry {
@@ -24,12 +25,26 @@ const TimeTracker: React.FC = () => {
     officeBreakTime: 0,
     inactiveTime: 0,
     sessionTime: 0,
+    payableTime: 0,
   });
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   const [currentState, setCurrentState] = useState<'working' | 'normal_break' | 'office_break' | 'inactive'>('working');
   const [showBreakDialog, setShowBreakDialog] = useState(false);
   const [breakEndTime, setBreakEndTime] = useState<Date | null>(null);
+  const [duration, setDuration] = useState(0);
+
+  // Format time in hours, minutes and seconds
+  const formatTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes.toString().padStart(2, '0')}m ${remainingSeconds.toString().padStart(2, '0')}s`;
+    }
+    return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
+  };
 
   // Update time stats every second when clocked in
   useEffect(() => {
@@ -50,12 +65,14 @@ const TimeTracker: React.FC = () => {
           switch (currentState) {
             case 'working':
               newStats.workTime = prev.workTime + 1;
+              newStats.payableTime = prev.payableTime + 1;
               break;
             case 'normal_break':
               newStats.normalBreakTime = prev.normalBreakTime + 1;
               break;
             case 'office_break':
               newStats.officeBreakTime = prev.officeBreakTime + 1;
+              newStats.payableTime = prev.payableTime + 1;
               break;
             case 'inactive':
               newStats.inactiveTime = prev.inactiveTime + 1;
@@ -64,7 +81,7 @@ const TimeTracker: React.FC = () => {
 
           return newStats;
         });
-      }, 1000); // Update every second
+      }, 1000);
     }
 
     return () => {
@@ -87,7 +104,8 @@ const TimeTracker: React.FC = () => {
           setBreakEndTime(null);
           setTimeline(prev => [...prev, {
             timestamp: now,
-            event: `Ended ${currentState === 'normal_break' ? 'Normal' : 'Office'} Break`
+            event: `Ended ${currentState === 'normal_break' ? 'Normal' : 'Office'} Break`,
+            details: `Completed full break duration: ${formatTime(duration)}`
           }]);
         }
       }, 1000);
@@ -98,7 +116,7 @@ const TimeTracker: React.FC = () => {
         clearInterval(breakTimerId);
       }
     };
-  }, [breakEndTime, currentState]);
+  }, [breakEndTime, currentState, duration, formatTime]);
 
   const handleClockInOut = useCallback(() => {
     const now = new Date();
@@ -119,7 +137,8 @@ const TimeTracker: React.FC = () => {
         normalBreakTime: timeStats.normalBreakTime,
         officeBreakTime: timeStats.officeBreakTime,
         inactiveTime: timeStats.inactiveTime,
-        sessionTime: timeStats.sessionTime
+        sessionTime: timeStats.sessionTime,
+        payableTime: timeStats.payableTime
       };
 
       // Reset all states
@@ -129,11 +148,11 @@ const TimeTracker: React.FC = () => {
       setBreakEndTime(null);
       setShowBreakDialog(false);
       
-      // Add final timeline entry
+      // Add final timeline entry with payable time
       setTimeline(prev => [...prev, {
         timestamp: now,
         event: 'Clocked Out',
-        details: `Total session time: ${formatTime(finalStats.sessionTime)}`
+        details: `Total session time: ${formatTime(finalStats.sessionTime)}\nPayable time: ${formatTime(finalStats.payableTime)}`
       }]);
 
       // Reset stats for next session
@@ -143,24 +162,26 @@ const TimeTracker: React.FC = () => {
         officeBreakTime: 0,
         inactiveTime: 0,
         sessionTime: 0,
+        payableTime: 0
       });
     }
   }, [timeStats]);
 
-  const handleStartBreak = useCallback((type: 'normal' | 'office', duration: number) => {
+  const handleStartBreak = useCallback((type: 'normal' | 'office', breakDuration: number) => {
     const now = new Date();
-    const endTime = new Date(now.getTime() + duration * 1000);
+    const endTime = new Date(now.getTime() + breakDuration * 1000);
     
     setShowBreakDialog(false);
     setBreakEndTime(endTime);
+    setDuration(breakDuration);
     setCurrentState(type === 'normal' ? 'normal_break' : 'office_break');
     
     setTimeline(prev => [...prev, {
       timestamp: now,
       event: `Started ${type === 'normal' ? 'Normal' : 'Office'} Break`,
-      details: `Duration: ${Math.floor(duration / 60)}h ${duration % 60}m`
+      details: `Planned duration: ${formatTime(breakDuration)}`
     }]);
-  }, []);
+  }, [formatTime]);
 
   const handleBreakButtonClick = useCallback(() => {
     if (isClockedIn) {
@@ -168,17 +189,25 @@ const TimeTracker: React.FC = () => {
     }
   }, [isClockedIn]);
 
-  // Format time in hours, minutes and seconds
-  const formatTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes.toString().padStart(2, '0')}m ${remainingSeconds.toString().padStart(2, '0')}s`;
+  const handleEndBreakEarly = useCallback(() => {
+    const now = new Date();
+    if (breakEndTime) {
+      // Calculate how long the break actually lasted
+      const breakStartTime = new Date(breakEndTime.getTime() - (duration * 1000));
+      const actualBreakDuration = Math.floor((now.getTime() - breakStartTime.getTime()) / 1000);
+      
+      // Calculate how much time was remaining
+      const remainingTime = Math.floor((breakEndTime.getTime() - now.getTime()) / 1000);
+      
+      setCurrentState('working');
+      setBreakEndTime(null);
+      setTimeline(prev => [...prev, {
+        timestamp: now,
+        event: `Ended ${currentState === 'normal_break' ? 'Normal' : 'Office'} Break Early`,
+        details: `Actual break time: ${formatTime(actualBreakDuration)} (ended ${formatTime(remainingTime)} early)`
+      }]);
     }
-    return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
-  };
+  }, [currentState, breakEndTime, formatTime, duration]);
 
   return (
     <div className="time-tracker">
@@ -191,13 +220,20 @@ const TimeTracker: React.FC = () => {
             >
               {isClockedIn ? 'Clock Out' : 'Clock In'}
             </button>
-            {isClockedIn && (
+            {isClockedIn && !currentState.includes('break') && (
               <button
                 onClick={handleBreakButtonClick}
                 className="break-button"
-                disabled={currentState.includes('break')}
               >
                 Take Break
+              </button>
+            )}
+            {currentState.includes('break') && (
+              <button
+                onClick={handleEndBreakEarly}
+                className="break-button end-break"
+              >
+                End Break
               </button>
             )}
           </div>
@@ -226,6 +262,10 @@ const TimeTracker: React.FC = () => {
             <div className="stat-item">
               <div className="stat-label">Inactive Time</div>
               <div className="stat-value">{formatTime(timeStats.inactiveTime)}</div>
+            </div>
+            <div className="stat-item payable-time">
+              <div className="stat-label">Payable Hours</div>
+              <div className="stat-value">{formatTime(timeStats.payableTime)}</div>
             </div>
             <div className="stat-item session-duration">
               <div className="stat-label">Session Duration</div>
