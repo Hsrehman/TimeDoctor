@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { join } from 'path'
-import { Input } from 'electron/main'
+
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -25,7 +25,6 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let mainWindow: BrowserWindow | null = null
-let inactivityTimer: NodeJS.Timeout | null = null
 const INACTIVITY_THRESHOLD = 5000; // 5 seconds
 let isUserActive = true
 let isClockIn = false

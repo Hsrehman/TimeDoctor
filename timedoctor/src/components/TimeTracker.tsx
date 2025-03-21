@@ -141,10 +141,6 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
     };
   }, [breakEndTime, currentState]);
 
-  const addTimelineEntry = useCallback((type: TimelineEntry['type']) => {
-    setTimeline(prev => [...prev, { type, timestamp: new Date() }]);
-  }, []);
-
   const handleResumeSession = useCallback(() => {
     const inactivityStart = new Date(inactivityStartTime || Date.now());
     const inactivityEnd = new Date();
