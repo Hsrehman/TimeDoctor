@@ -1,237 +1,228 @@
 .time-tracker {
-  width: 100%;
+  padding: 20px;
   max-width: 800px;
   margin: 0 auto;
-  padding: 1rem;
 }
 
 .tracker-card {
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
-  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 20px;
 }
 
 .tracker-header {
-  text-align: center;
-  margin-bottom: 2rem;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid #eee;
-}
-
-.clock-button {
-  padding: 1rem 3rem;
-  font-size: 1.2rem;
-  font-weight: 600;
-  border: none;
-  border-radius: 50px;
-  background: #4CAF50;
-  color: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
-}
-
-.clock-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-}
-
-.clock-button.clocked-in {
-  background: #f44336;
-  box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
-}
-
-.clock-button.clocked-in:hover {
-  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
-}
-
-.statistics {
-  margin-bottom: 2rem;
-}
-
-.statistics h2 {
-  font-size: 1.5rem;
-  color: #333;
-  margin-bottom: 1.5rem;
-  font-weight: 600;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-}
-
-.stat-item {
-  background: #f8f9fa;
-  padding: 1.5rem;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-}
-
-.stat-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.session-duration {
-  grid-column: 1 / -1;
-  background: #e8f5e9;
-}
-
-.stat-label {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.5rem;
-}
-
-.stat-value {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #333;
-}
-
-.timeline {
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid #eee;
-}
-
-.timeline h2 {
-  font-size: 1.5rem;
-  color: #333;
-  margin-bottom: 1.5rem;
-  font-weight: 600;
-}
-
-.timeline-container {
-  position: relative;
-  padding: 1rem 0;
-}
-
-.timeline-empty {
-  text-align: center;
-  color: #666;
-  padding: 2rem;
-  background: #f8f9fa;
-  border-radius: 12px;
-}
-
-.timeline-entries {
-  position: relative;
-}
-
-.timeline-entries::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: #e0e0e0;
-}
-
-.timeline-entry {
-  position: relative;
-  padding-left: 2rem;
-  margin-bottom: 1.5rem;
-}
-
-.timeline-dot {
-  position: absolute;
-  left: -5px;
-  top: 6px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #4CAF50;
-  border: 2px solid white;
-}
-
-.timeline-content {
-  background: #f8f9fa;
-  padding: 1rem;
-  border-radius: 8px;
-}
-
-.timeline-content time {
-  font-size: 0.9rem;
-  color: #666;
-  margin-right: 1rem;
-}
-
-.timeline-event {
-  font-weight: 500;
-  color: #333;
-}
-
-.timeline-details {
-  margin-top: 0.5rem;
-  color: #666;
-  font-size: 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
 .header-buttons {
   display: flex;
-  gap: 1rem;
-  justify-content: center;
-  margin-bottom: 1rem;
+  gap: 10px;
+}
+
+.clock-button {
+  padding: 10px 20px;
+  font-size: 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: #4CAF50;
+  color: white;
+  transition: background-color 0.3s;
+}
+
+.clock-button.clocked-in {
+  background-color: #f44336;
 }
 
 .break-button {
-  padding: 1rem 2rem;
-  font-size: 1.2rem;
-  font-weight: 600;
+  padding: 10px 20px;
+  font-size: 16px;
   border: none;
-  border-radius: 50px;
-  background: #2196F3;
-  color: white;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
-}
-
-.break-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
-}
-
-.break-button:disabled {
-  background: #90caf9;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
+  background-color: #2196F3;
+  color: white;
 }
 
 .break-button.end-break {
-  background: #f44336;
-  box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+  background-color: #FF9800;
 }
 
-.break-button.end-break:hover {
-  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+.time-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
 }
 
-.break-timer {
-  margin-top: 1rem;
-  padding: 0.75rem 1.5rem;
-  background: #e3f2fd;
-  color: #1976d2;
-  border-radius: 50px;
-  font-weight: 500;
-  display: inline-block;
+.stat-item {
+  background: #f5f5f5;
+  padding: 15px;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-.stat-item.payable-time {
+.stat-item label {
+  font-size: 14px;
+  color: #666;
+}
+
+.stat-item span {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
+
+.stat-item.payable {
   background: #e8f5e9;
-  border: 1px solid #81c784;
 }
 
-.stat-item.payable-time .stat-label {
+.stat-item.payable label {
   color: #2e7d32;
 }
 
-.stat-item.payable-time .stat-value {
+.stat-item.payable span {
   color: #1b5e20;
+}
+
+.timeline {
+  margin-top: 30px;
+}
+
+.timeline h3 {
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.timeline-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.timeline-entry {
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border-left: 4px solid #2196F3;
+}
+
+.timeline-entry[data-type='inactivity_start'],
+.timeline-entry[data-type='inactivity_end'] {
+  border-left-color: #ff9800;
+  background: #fff3e0;
+}
+
+.timeline-entry[data-type='break_start'],
+.timeline-entry[data-type='break_end'] {
+  border-left-color: #4caf50;
+  background: #e8f5e9;
+}
+
+.timeline-entry[data-type='clock_in'],
+.timeline-entry[data-type='clock_out'] {
+  border-left-color: #2196F3;
+  background: #e3f2fd;
+}
+
+.timeline-entry[data-type='window_unfocus'] {
+  border-left-color: #9e9e9e;
+  background: #f5f5f5;
+}
+
+.timeline-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.timeline-content time {
+  font-size: 14px;
+  color: #666;
+  min-width: 80px;
+}
+
+.timeline-event {
+  font-size: 14px;
+  color: #333;
+}
+
+.inactivity-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 300px;
+  text-align: center;
+}
+
+.inactivity-dialog h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.inactivity-dialog p {
+  margin: 1rem 0;
+  color: #666;
+}
+
+.inactivity-dialog .dialog-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.inactivity-dialog button {
+  padding: 0.5rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.inactivity-dialog button:first-child {
+  background-color: #007bff;
+  color: white;
+}
+
+.inactivity-dialog button:last-child {
+  background-color: #6c757d;
+  color: white;
+}
+
+.inactivity-dialog button:hover {
+  opacity: 0.9;
+}
+
+.inactivity-dialog .hint {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #666;
+  font-style: italic;
+}
+
+/* Add an overlay behind the dialog */
+.inactivity-dialog::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: -1;
 } 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ipcRenderer } from 'electron';
 import './TimeTracker.css';
 import BreakDialog from './BreakDialog';
+import InactivityDialog from './InactivityDialog';
 
 interface TimeStats {
   workTime: number;
@@ -12,12 +14,18 @@ interface TimeStats {
 }
 
 interface TimelineEntry {
+  type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end' | 'window_unfocus' | 'inactivity_start' | 'inactivity_end';
   timestamp: Date;
-  event: string;
-  details?: string;
+  description?: string;
 }
 
-const TimeTracker: React.FC = () => {
+interface TimeTrackerProps {
+  // ... existing props ...
+}
+
+type TimeTrackerState = 'working' | 'normal_break' | 'office_break' | 'inactive' | 'not_working';
+
+const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [timeStats, setTimeStats] = useState<TimeStats>({
     workTime: 0,
@@ -29,12 +37,16 @@ const TimeTracker: React.FC = () => {
   });
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
-  const [currentState, setCurrentState] = useState<'working' | 'normal_break' | 'office_break' | 'inactive'>('working');
+  const [currentState, setCurrentState] = useState<TimeTrackerState>('not_working');
   const [showBreakDialog, setShowBreakDialog] = useState(false);
   const [breakEndTime, setBreakEndTime] = useState<Date | null>(null);
   const [duration, setDuration] = useState(0);
+  const [isActive, setIsActive] = useState(true);
+  const [showInactivityDialog, setShowInactivityDialog] = useState(false);
+  const [inactiveTime, setInactiveTime] = useState(0);
+  const [inactivityStartTime, setInactivityStartTime] = useState<number | null>(null);
 
-  // Format time in hours, minutes and seconds
+  // Format time in hours, minutes and seconds based on duration
   const formatTime = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -42,8 +54,14 @@ const TimeTracker: React.FC = () => {
     
     if (hours > 0) {
       return `${hours}h ${minutes.toString().padStart(2, '0')}m ${remainingSeconds.toString().padStart(2, '0')}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
     }
-    return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
+    return `${remainingSeconds}s`;
+  };
+
+  const formatTimeWithSeconds = (date: Date): string => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
   };
 
   // Update time stats every second when clocked in
@@ -75,7 +93,12 @@ const TimeTracker: React.FC = () => {
               newStats.payableTime = prev.payableTime + 1;
               break;
             case 'inactive':
-              newStats.inactiveTime = prev.inactiveTime + 1;
+              // When inactivity first starts, add the initial 5 seconds
+              if (inactivityStartTime && prev.inactiveTime === 0) {
+                newStats.inactiveTime = 5; // Start with 5 seconds
+              } else {
+                newStats.inactiveTime = prev.inactiveTime + 1;
+              }
               break;
           }
 
@@ -89,7 +112,7 @@ const TimeTracker: React.FC = () => {
         clearInterval(intervalId);
       }
     };
-  }, [isClockedIn, sessionStartTime, currentState]);
+  }, [isClockedIn, sessionStartTime, currentState, inactivityStartTime]);
 
   // Add break timer effect
   useEffect(() => {
@@ -103,9 +126,9 @@ const TimeTracker: React.FC = () => {
           setCurrentState('working');
           setBreakEndTime(null);
           setTimeline(prev => [...prev, {
+            type: 'break_end',
             timestamp: now,
-            event: `Ended ${currentState === 'normal_break' ? 'Normal' : 'Office'} Break`,
-            details: `Completed full break duration: ${formatTime(duration)}`
+            description: `Ended ${currentState === 'normal_break' ? 'Normal' : 'Office'} Break`
           }]);
         }
       }, 1000);
@@ -116,113 +139,213 @@ const TimeTracker: React.FC = () => {
         clearInterval(breakTimerId);
       }
     };
-  }, [breakEndTime, currentState, duration, formatTime]);
+  }, [breakEndTime, currentState]);
+
+  const addTimelineEntry = useCallback((type: TimelineEntry['type']) => {
+    setTimeline(prev => [...prev, { type, timestamp: new Date() }]);
+  }, []);
+
+  const handleWindowFocus = useCallback((_: any, isFocused: boolean) => {
+    if (!isFocused && isClockedIn) {
+      addTimelineEntry('window_unfocus');
+    }
+  }, [isClockedIn, addTimelineEntry]);
+
+  const handleResumeSession = useCallback(() => {
+    const inactivityStart = new Date(inactivityStartTime || Date.now());
+    const inactivityEnd = new Date();
+    const inactiveDuration = inactivityStartTime ? Math.floor((inactivityEnd.getTime() - inactivityStartTime) / 1000) : 0;
+    
+    // Add the inactivity end entry to timeline
+    setTimeline(prev => [...prev, {
+      type: 'inactivity_end',
+      timestamp: inactivityEnd,
+      description: `Inactivity Ended (${formatTimeWithSeconds(inactivityStart)} - ${formatTimeWithSeconds(inactivityEnd)}, duration: ${formatTime(inactiveDuration)})`
+    }]);
+
+    // Reset inactivity state
+    setShowInactivityDialog(false);
+    setInactiveTime(0);
+    setInactivityStartTime(null);
+    setCurrentState('working');
+    
+    // Tell main process we're active and to start monitoring again immediately
+    ipcRenderer.send('activity-status-changed', true);
+    ipcRenderer.send('start-monitoring');
+  }, [inactivityStartTime, formatTime, formatTimeWithSeconds]);
+
+  useEffect(() => {
+    const handleActivityChange = (_: any, active: boolean) => {
+      if (isClockedIn && !currentState.includes('break')) {
+        setIsActive(active);
+        if (!active) {
+          const inactivityStartTimeWithOffset = Date.now() - 5000;
+          setInactivityStartTime(inactivityStartTimeWithOffset);
+          setCurrentState('inactive');
+          
+          // More detailed inactivity start entry
+          setTimeline(prev => [...prev, {
+            type: 'inactivity_start',
+            timestamp: new Date(inactivityStartTimeWithOffset),
+            description: `Inactivity Detected (started at ${formatTimeWithSeconds(new Date(inactivityStartTimeWithOffset))})`
+          }]);
+        }
+        setShowInactivityDialog(!active);
+      }
+    };
+
+    const handleResumeFromMain = () => {
+      // Call handleResumeSession when spacebar is pressed
+      handleResumeSession();
+    };
+
+    ipcRenderer.on('activity-status-changed', handleActivityChange);
+    ipcRenderer.on('resume-activity', handleResumeFromMain);
+    ipcRenderer.on('window-focus-update', handleWindowFocus);
+
+    return () => {
+      ipcRenderer.removeListener('activity-status-changed', handleActivityChange);
+      ipcRenderer.removeListener('resume-activity', handleResumeFromMain);
+      ipcRenderer.removeListener('window-focus-update', handleWindowFocus);
+    };
+  }, [isClockedIn, handleWindowFocus, inactivityStartTime, formatTime, currentState, handleResumeSession]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (inactivityStartTime && !isActive) {
+      interval = setInterval(() => {
+        // Calculate total inactivity time from the adjusted start time
+        setInactiveTime(Date.now() - inactivityStartTime);
+      }, 1000);
+    }
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [inactivityStartTime, isActive]);
 
   const handleClockInOut = useCallback(() => {
     const now = new Date();
-    
     if (!isClockedIn) {
-      // Clock In
       setIsClockedIn(true);
       setSessionStartTime(now);
       setCurrentState('working');
-      setTimeline(prev => [...prev, {
-        timestamp: now,
-        event: 'Clocked In'
-      }]);
-    } else {
-      // Clock Out
-      const finalStats = {
-        workTime: timeStats.workTime,
-        normalBreakTime: timeStats.normalBreakTime,
-        officeBreakTime: timeStats.officeBreakTime,
-        inactiveTime: timeStats.inactiveTime,
-        sessionTime: timeStats.sessionTime,
-        payableTime: timeStats.payableTime
-      };
-
-      // Reset all states
-      setIsClockedIn(false);
-      setSessionStartTime(null);
-      setCurrentState('working');
-      setBreakEndTime(null);
-      setShowBreakDialog(false);
-      
-      // Add final timeline entry with payable time
-      setTimeline(prev => [...prev, {
-        timestamp: now,
-        event: 'Clocked Out',
-        details: `Total session time: ${formatTime(finalStats.sessionTime)}\nPayable time: ${formatTime(finalStats.payableTime)}`
-      }]);
-
-      // Reset stats for next session
+      setIsActive(true);
+      ipcRenderer.send('clock-status-changed', true);  // Notify main process of clock in
       setTimeStats({
         workTime: 0,
         normalBreakTime: 0,
         officeBreakTime: 0,
         inactiveTime: 0,
         sessionTime: 0,
-        payableTime: 0
+        payableTime: 0,
       });
+      setTimeline(prev => [...prev, {
+        type: 'clock_in',
+        timestamp: now,
+        description: 'Clocked In'
+      }]);
+    } else {
+      // If on break, end it first
+      if (currentState.includes('break') && breakEndTime) {
+        const breakDuration = Math.floor((now.getTime() - (breakEndTime.getTime() - duration * 1000)) / 1000);
+        setTimeline(prev => [...prev, {
+          type: 'break_end',
+          timestamp: now,
+          description: `Ended ${currentState === 'normal_break' ? 'Normal' : 'Office'} Break (${formatTime(breakDuration)}) due to clock-out`
+        }]);
+      }
+      
+      setIsClockedIn(false);
+      setSessionStartTime(null);
+      setCurrentState('not_working');
+      setBreakEndTime(null);
+      setShowBreakDialog(false);
+      setIsActive(true);
+      ipcRenderer.send('clock-status-changed', false);  // Notify main process of clock out
+      setShowInactivityDialog(false);
+      setInactivityStartTime(null);
+      setTimeline(prev => [...prev, {
+        type: 'clock_out',
+        timestamp: now,
+        description: 'Clocked Out'
+      }]);
     }
-  }, [timeStats]);
+  }, [isClockedIn, currentState, breakEndTime, duration, formatTime]);
 
-  const handleStartBreak = useCallback((type: 'normal' | 'office', breakDuration: number) => {
+  const handleBreakStart = useCallback((type: 'normal' | 'office', duration: number) => {
     const now = new Date();
-    const endTime = new Date(now.getTime() + breakDuration * 1000);
-    
-    setShowBreakDialog(false);
-    setBreakEndTime(endTime);
-    setDuration(breakDuration);
+    const endTime = new Date(now.getTime() + duration * 1000);
     setCurrentState(type === 'normal' ? 'normal_break' : 'office_break');
-    
+    setBreakEndTime(endTime);
+    setDuration(duration);
+    setShowBreakDialog(false);
     setTimeline(prev => [...prev, {
+      type: 'break_start',
       timestamp: now,
-      event: `Started ${type === 'normal' ? 'Normal' : 'Office'} Break`,
-      details: `Planned duration: ${formatTime(breakDuration)}`
+      description: `Started ${type === 'normal' ? 'Normal' : 'Office'} Break for ${formatTime(duration)}`
     }]);
   }, [formatTime]);
 
-  const handleBreakButtonClick = useCallback(() => {
-    if (isClockedIn) {
-      setShowBreakDialog(true);
-    }
-  }, [isClockedIn]);
-
-  const handleEndBreakEarly = useCallback(() => {
+  const handleBreakEnd = useCallback(() => {
     const now = new Date();
     if (breakEndTime) {
-      // Calculate how long the break actually lasted
-      const breakStartTime = new Date(breakEndTime.getTime() - (duration * 1000));
-      const actualBreakDuration = Math.floor((now.getTime() - breakStartTime.getTime()) / 1000);
-      
-      // Calculate how much time was remaining
-      const remainingTime = Math.floor((breakEndTime.getTime() - now.getTime()) / 1000);
-      
+      const actualDuration = Math.floor((now.getTime() - breakEndTime.getTime() + duration * 1000) / 1000);
       setCurrentState('working');
       setBreakEndTime(null);
+      setDuration(0);
       setTimeline(prev => [...prev, {
+        type: 'break_end',
         timestamp: now,
-        event: `Ended ${currentState === 'normal_break' ? 'Normal' : 'Office'} Break Early`,
-        details: `Actual break time: ${formatTime(actualBreakDuration)} (ended ${formatTime(remainingTime)} early)`
+        description: `Ended ${currentState === 'normal_break' ? 'Normal' : 'Office'} Break (${formatTime(actualDuration)})`
       }]);
     }
-  }, [currentState, breakEndTime, formatTime, duration]);
+  }, [breakEndTime, currentState, duration, formatTime]);
+
+  const handleEndSession = () => {
+    const inactivityStart = new Date(inactivityStartTime || Date.now());
+    const inactivityEnd = new Date();
+    const inactiveDuration = inactivityStartTime ? Math.floor((inactivityEnd.getTime() - inactivityStartTime) / 1000) : 0;
+    
+    // Add the inactivity end entry to timeline before clock out
+    setTimeline(prev => [...prev, {
+      type: 'inactivity_end',
+      timestamp: inactivityEnd,
+      description: `Inactivity Ended (${formatTimeWithSeconds(inactivityStart)} - ${formatTimeWithSeconds(inactivityEnd)}, duration: ${formatTime(inactiveDuration)})`
+    }]);
+
+    setShowInactivityDialog(false);
+    setInactiveTime(0);
+    setInactivityStartTime(null);
+    if (isClockedIn) {
+      handleClockInOut();
+    }
+  };
 
   return (
     <div className="time-tracker">
       <div className="tracker-card">
         <header className="tracker-header">
           <div className="header-buttons">
-            <button 
-              onClick={handleClockInOut}
-              className={`clock-button ${isClockedIn ? 'clocked-in' : ''}`}
-            >
-              {isClockedIn ? 'Clock Out' : 'Clock In'}
-            </button>
+            <div className="controls">
+              <button 
+                onClick={handleClockInOut}
+                // Remove focus after click
+                onMouseUp={(e) => e.currentTarget.blur()}
+                // Prevent spacebar from triggering when focused
+                onKeyDown={(e) => {
+                  if (e.key === ' ') {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                {isClockedIn ? 'Clock Out' : 'Clock In'}
+              </button>
+            </div>
             {isClockedIn && !currentState.includes('break') && (
               <button
-                onClick={handleBreakButtonClick}
+                onClick={() => setShowBreakDialog(true)}
                 className="break-button"
               >
                 Take Break
@@ -230,77 +353,89 @@ const TimeTracker: React.FC = () => {
             )}
             {currentState.includes('break') && (
               <button
-                onClick={handleEndBreakEarly}
+                onClick={handleBreakEnd}
                 className="break-button end-break"
               >
-                End Break
+                End Break Early
               </button>
             )}
           </div>
-          {breakEndTime && (
-            <div className="break-timer">
-              Break ends in: {formatTime(Math.ceil((breakEndTime.getTime() - Date.now()) / 1000))}
-            </div>
-          )}
         </header>
 
-        <section className="statistics">
-          <h2>Statistics</h2>
-          <div className="stats-grid">
-            <div className="stat-item">
-              <div className="stat-label">Work Time</div>
-              <div className="stat-value">{formatTime(timeStats.workTime)}</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-label">Normal Break</div>
-              <div className="stat-value">{formatTime(timeStats.normalBreakTime)}</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-label">Office Break</div>
-              <div className="stat-value">{formatTime(timeStats.officeBreakTime)}</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-label">Inactive Time</div>
-              <div className="stat-value">{formatTime(timeStats.inactiveTime)}</div>
-            </div>
-            <div className="stat-item payable-time">
-              <div className="stat-label">Payable Hours</div>
-              <div className="stat-value">{formatTime(timeStats.payableTime)}</div>
-            </div>
-            <div className="stat-item session-duration">
-              <div className="stat-label">Session Duration</div>
-              <div className="stat-value">{formatTime(timeStats.sessionTime)}</div>
-            </div>
+        <div className="time-stats">
+          <div className="stat-item">
+            <label>Work Time:</label>
+            <span>{formatTime(timeStats.workTime)}</span>
           </div>
-        </section>
+          <div className="stat-item">
+            <label>Normal Break:</label>
+            <span>{formatTime(timeStats.normalBreakTime)}</span>
+          </div>
+          <div className="stat-item">
+            <label>Office Break:</label>
+            <span>{formatTime(timeStats.officeBreakTime)}</span>
+          </div>
+          <div className="stat-item">
+            <label>Inactive Time:</label>
+            <span>{formatTime(timeStats.inactiveTime)}</span>
+          </div>
+          <div className="stat-item">
+            <label>Session Time:</label>
+            <span>{formatTime(timeStats.sessionTime)}</span>
+          </div>
+          <div className="stat-item payable">
+            <label>Payable Hours:</label>
+            <span>{formatTime(timeStats.payableTime)}</span>
+          </div>
+        </div>
 
-        <section className="timeline">
-          <h2>Timeline</h2>
-          <div className="timeline-container">
-            {timeline.length === 0 ? (
-              <div className="timeline-empty">No events yet</div>
-            ) : (
-              <div className="timeline-entries">
-                {timeline.map((entry, index) => (
-                  <div key={index} className="timeline-entry">
-                    <div className="timeline-dot"></div>
-                    <div className="timeline-content">
-                      <time>{entry.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
-                      <span className="timeline-event">{entry.event}</span>
-                      {entry.details && <p className="timeline-details">{entry.details}</p>}
-                    </div>
-                  </div>
-                ))}
+        <div className="timeline">
+          <h3>Timeline</h3>
+          <div className="timeline-entries">
+            {timeline.map((entry, index) => (
+              <div 
+                key={index} 
+                className="timeline-entry"
+                data-type={entry.type}
+              >
+                <div className="timeline-content">
+                  <time>{entry.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+                  <span className="timeline-event">{entry.description}</span>
+                </div>
               </div>
-            )}
+            ))}
           </div>
-        </section>
+        </div>
 
         {showBreakDialog && (
           <BreakDialog
-            onStartBreak={handleStartBreak}
+            onStartBreak={handleBreakStart}
             onCancel={() => setShowBreakDialog(false)}
           />
+        )}
+
+        {showInactivityDialog && (
+          <div className="inactivity-dialog">
+            <h3>Are you still working?</h3>
+            <p>No activity detected for {formatTime(Math.floor(inactiveTime / 1000))}</p>
+            <div className="dialog-buttons">
+              <button 
+                onClick={handleResumeSession}
+                // Remove focus after click
+                onMouseUp={(e) => e.currentTarget.blur()}
+              >
+                Resume
+              </button>
+              <button 
+                onClick={handleEndSession}
+                // Remove focus after click
+                onMouseUp={(e) => e.currentTarget.blur()}
+              >
+                End Session
+              </button>
+            </div>
+            <p className="hint">Press spacebar to resume working</p>
+          </div>
         )}
       </div>
     </div>
