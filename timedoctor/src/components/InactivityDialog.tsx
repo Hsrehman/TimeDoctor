@@ -9,45 +9,51 @@ import {
 } from '@mui/material';
 
 interface InactivityDialogProps {
-  open: boolean;
+  inactiveTime: number;
   onResume: () => void;
   onEndSession: () => void;
-  inactiveTime: number;
+  formatTime: (seconds: number) => string;
 }
 
 const InactivityDialog: React.FC<InactivityDialogProps> = ({
-  open,
+  inactiveTime,
   onResume,
   onEndSession,
-  inactiveTime,
+  formatTime
 }) => {
-  const formatInactiveTime = (ms: number): string => {
-    const seconds = Math.floor(ms / 1000);
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes.toString().padStart(2, '0')}m ${remainingSeconds.toString().padStart(2, '0')}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
-    }
-    return `${remainingSeconds}s`;
-  };
-
   return (
-    <Dialog open={open} onClose={onResume}>
+    <Dialog 
+      open={true} 
+      onClose={onResume}
+    >
       <DialogTitle>Inactivity Detected</DialogTitle>
       <DialogContent>
         <Typography>
-          You have been inactive for {formatInactiveTime(inactiveTime)}. Would you like to resume your session or end it?
+          You have been inactive for {formatTime(Math.floor(inactiveTime / 1000))}. Would you like to resume your session or end it?
+        </Typography>
+        <Typography 
+          variant="body2" 
+          color="textSecondary" 
+          style={{ marginTop: '1rem', fontStyle: 'italic' }}
+        >
+          Press spacebar to resume working
         </Typography>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onEndSession} color="error">
+        <Button 
+          onClick={onEndSession} 
+          color="error"
+          onMouseUp={(e) => e.currentTarget.blur()}
+        >
           End Session
         </Button>
-        <Button onClick={onResume} color="primary" variant="contained" autoFocus>
+        <Button 
+          onClick={onResume} 
+          color="primary" 
+          variant="contained" 
+          autoFocus
+          onMouseUp={(e) => e.currentTarget.blur()}
+        >
           Resume Session
         </Button>
       </DialogActions>

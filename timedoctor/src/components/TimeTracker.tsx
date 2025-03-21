@@ -415,27 +415,12 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
         )}
 
         {showInactivityDialog && (
-          <div className="inactivity-dialog">
-            <h3>Are you still working?</h3>
-            <p>No activity detected for {formatTime(Math.floor(inactiveTime / 1000))}</p>
-            <div className="dialog-buttons">
-              <button 
-                onClick={handleResumeSession}
-                // Remove focus after click
-                onMouseUp={(e) => e.currentTarget.blur()}
-              >
-                Resume
-              </button>
-              <button 
-                onClick={handleEndSession}
-                // Remove focus after click
-                onMouseUp={(e) => e.currentTarget.blur()}
-              >
-                End Session
-              </button>
-            </div>
-            <p className="hint">Press spacebar to resume working</p>
-          </div>
+          <InactivityDialog
+            inactiveTime={inactiveTime}
+            onResume={handleResumeSession}
+            onEndSession={handleEndSession}
+            formatTime={formatTime}
+          />
         )}
       </div>
     </div>
