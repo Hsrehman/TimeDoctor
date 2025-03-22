@@ -104,7 +104,7 @@ function createWindow() {
   })
 
   // Enable screen capture permission
-  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+  mainWindow.webContents.session.setPermissionRequestHandler((_, permission, callback) => {
     const allowedPermissions = ['media', 'display-capture', 'window-placement'];
     if (allowedPermissions.includes(permission)) {
       callback(true);
@@ -114,7 +114,7 @@ function createWindow() {
   });
 
   // Enable screen capture
-  mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission) => {
+  mainWindow.webContents.session.setPermissionCheckHandler((_, permission) => {
     return ['media', 'display-capture', 'window-placement'].includes(permission);
   });
 

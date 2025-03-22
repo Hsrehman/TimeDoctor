@@ -4,8 +4,6 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
 import { desktopCapturer, ipcMain, app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-const __filename = fileURLToPath(import.meta.url);
-path.dirname(__filename);
 class ActivityTracker {
   constructor() {
     __publicField(this, "currentActivity", null);
@@ -265,7 +263,7 @@ function createWindow() {
       webSecurity: false
     }
   });
-  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+  mainWindow.webContents.session.setPermissionRequestHandler((_, permission, callback) => {
     const allowedPermissions = ["media", "display-capture", "window-placement"];
     if (allowedPermissions.includes(permission)) {
       callback(true);
@@ -273,7 +271,7 @@ function createWindow() {
       callback(false);
     }
   });
-  mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission) => {
+  mainWindow.webContents.session.setPermissionCheckHandler((_, permission) => {
     return ["media", "display-capture", "window-placement"].includes(permission);
   });
   mainWindow.webContents.on("did-finish-load", () => {

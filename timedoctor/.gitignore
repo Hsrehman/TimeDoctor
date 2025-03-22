@@ -28,6 +28,7 @@ dist-ssr
 *.exe
 *.app
 /dist-electron
+dist-electron/preload.js
 electron-builder.yaml
 electron-builder.yml
 **/Electron.app
