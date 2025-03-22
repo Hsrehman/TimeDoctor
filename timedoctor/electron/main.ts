@@ -1,8 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-
-
+import ActivityTracker from './activityTracker'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -25,11 +24,35 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let mainWindow: BrowserWindow | null = null
-const INACTIVITY_THRESHOLD = 5000; // 5 seconds
+const INACTIVITY_THRESHOLD = 50000; // 50 seconds
 let isUserActive = true
 let isClockIn = false
 let activityCheckInterval: NodeJS.Timeout | null = null
 let lastActivityTime = Date.now()
+
+// Initialize activity tracker
+const activityTracker = new ActivityTracker();
+
+// Set up IPC handlers for activity tracking
+ipcMain.handle('get-activity-history', () => {
+  return activityTracker.getActivityHistory();
+});
+
+ipcMain.handle('get-current-activity', () => {
+  return activityTracker.getCurrentActivity();
+});
+
+ipcMain.handle('get-activity-stats', (_, startTime?: number, endTime?: number) => {
+  return activityTracker.getStats(startTime, endTime);
+});
+
+ipcMain.on('clear-activity-history', () => {
+  activityTracker.clearHistory();
+});
+
+ipcMain.on('update-app-category', (_, appName: string, category: string, score: number) => {
+  activityTracker.updateApplicationCategory(appName, category, score);
+});
 
 function startActivityMonitoring(window: BrowserWindow) {
   lastActivityTime = Date.now()
@@ -38,6 +61,11 @@ function startActivityMonitoring(window: BrowserWindow) {
   // Clear existing interval if any
   if (activityCheckInterval) {
     clearInterval(activityCheckInterval)
+  }
+
+  // Start activity tracking if clocked in
+  if (isClockIn) {
+    activityTracker.startTracking();
   }
 
   // Start checking for inactivity immediately
@@ -71,8 +99,24 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.mjs'),
       nodeIntegration: true,
       contextIsolation: false,
+      webSecurity: false,
     },
   })
+
+  // Enable screen capture permission
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowedPermissions = ['media', 'display-capture', 'window-placement'];
+    if (allowedPermissions.includes(permission)) {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+
+  // Enable screen capture
+  mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission) => {
+    return ['media', 'display-capture', 'window-placement'].includes(permission);
+  });
 
   // Test active push message to Renderer-process.
   mainWindow.webContents.on('did-finish-load', () => {
@@ -98,6 +142,7 @@ function createWindow() {
     if (!clockedIn && activityCheckInterval) {
       clearInterval(activityCheckInterval);
       activityCheckInterval = null;
+      activityTracker.stopTracking();
     } else if (clockedIn && mainWindow) {
       startActivityMonitoring(mainWindow);
     }

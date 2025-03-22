@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ipcRenderer } from 'electron';
 import './TimeTracker.css';
 import BreakDialog from './BreakDialog';
 import InactivityDialog from './InactivityDialog';
+import ActivityDashboard from './ActivityDashboard';
 
 interface TimeStats {
   workTime: number;
@@ -19,13 +20,9 @@ interface TimelineEntry {
   description?: string;
 }
 
-interface TimeTrackerProps {
-  // ... existing props ...
-}
-
 type TimeTrackerState = 'working' | 'normal_break' | 'office_break' | 'inactive' | 'not_working';
 
-const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
+const TimeTracker = () => {
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [timeStats, setTimeStats] = useState<TimeStats>({
     workTime: 0,
@@ -61,7 +58,23 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
   };
 
   const formatTimeWithSeconds = (date: Date): string => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    // Format to show hh:mm:ss AM/PM
+    let hours = date.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
+    return `${hours}:${minutes}:${seconds} ${ampm}`;
+  };
+
+  const formatBreakDuration = (duration: number): string => {
+    const minutes = Math.floor(duration / 60);
+    const seconds = duration % 60;
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
   };
 
   // Update time stats every second when clocked in
@@ -79,25 +92,24 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
           // Update session duration
           newStats.sessionTime = sessionSeconds;
 
-          // Update specific time based on current state
+          // Calculate time based on current state and elapsed time
           switch (currentState) {
             case 'working':
-              newStats.workTime = prev.workTime + 1;
-              newStats.payableTime = prev.payableTime + 1;
+              // Calculate work time as session time minus break and inactive time
+              newStats.workTime = sessionSeconds - (prev.normalBreakTime + prev.officeBreakTime + prev.inactiveTime);
+              newStats.payableTime = newStats.workTime + prev.officeBreakTime; // Work time plus office break time
               break;
             case 'normal_break':
               newStats.normalBreakTime = prev.normalBreakTime + 1;
               break;
             case 'office_break':
               newStats.officeBreakTime = prev.officeBreakTime + 1;
-              newStats.payableTime = prev.payableTime + 1;
+              newStats.payableTime = prev.workTime + prev.officeBreakTime + 1;
               break;
             case 'inactive':
-              // When inactivity first starts, add the initial 5 seconds
-              if (inactivityStartTime && prev.inactiveTime === 0) {
-                newStats.inactiveTime = 5; // Start with 5 seconds
-              } else {
-                newStats.inactiveTime = prev.inactiveTime + 1;
+              if (inactivityStartTime) {
+                const inactiveSeconds = Math.floor((now.getTime() - inactivityStartTime) / 1000);
+                newStats.inactiveTime = inactiveSeconds;
               }
               break;
           }
@@ -146,23 +158,20 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
     const inactivityEnd = new Date();
     const inactiveDuration = inactivityStartTime ? Math.floor((inactivityEnd.getTime() - inactivityStartTime) / 1000) : 0;
     
-    // Add the inactivity end entry to timeline
     setTimeline(prev => [...prev, {
       type: 'inactivity_end',
       timestamp: inactivityEnd,
-      description: `Inactivity Ended (${formatTimeWithSeconds(inactivityStart)} - ${formatTimeWithSeconds(inactivityEnd)}, duration: ${formatTime(inactiveDuration)})`
+      description: `Inactivity Ended (${formatTimeWithSeconds(inactivityStart)} - ${formatTimeWithSeconds(inactivityEnd)}, duration: ${formatBreakDuration(inactiveDuration)})`
     }]);
 
-    // Reset inactivity state
     setShowInactivityDialog(false);
     setInactiveTime(0);
     setInactivityStartTime(null);
     setCurrentState('working');
     
-    // Tell main process we're active and to start monitoring again immediately
     ipcRenderer.send('activity-status-changed', true);
     ipcRenderer.send('start-monitoring');
-  }, [inactivityStartTime, formatTime, formatTimeWithSeconds]);
+  }, [inactivityStartTime]);
 
   useEffect(() => {
     const handleActivityChange = (_: any, active: boolean) => {
@@ -272,9 +281,9 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
     setTimeline(prev => [...prev, {
       type: 'break_start',
       timestamp: now,
-      description: `Started ${type === 'normal' ? 'Normal' : 'Office'} Break for ${formatTime(duration)}`
+      description: `Started ${type === 'normal' ? 'Normal' : 'Office'} Break for ${formatBreakDuration(duration)}`
     }]);
-  }, [formatTime]);
+  }, []);
 
   const handleBreakEnd = useCallback(() => {
     const now = new Date();
@@ -300,7 +309,7 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
     setTimeline(prev => [...prev, {
       type: 'inactivity_end',
       timestamp: inactivityEnd,
-      description: `Inactivity Ended (${formatTimeWithSeconds(inactivityStart)} - ${formatTimeWithSeconds(inactivityEnd)}, duration: ${formatTime(inactiveDuration)})`
+      description: `Inactivity Ended (${formatTimeWithSeconds(inactivityStart)} - ${formatTimeWithSeconds(inactivityEnd)}, duration: ${formatBreakDuration(inactiveDuration)})`
     }]);
 
     setShowInactivityDialog(false);
@@ -377,6 +386,8 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
           </div>
         </div>
 
+        <ActivityDashboard />
+
         <div className="timeline">
           <h3>Timeline</h3>
           <div className="timeline-entries">
@@ -387,7 +398,7 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ /* existing props */ }) => {
                 data-type={entry.type}
               >
                 <div className="timeline-content">
-                  <time>{entry.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+                  <time>{formatTimeWithSeconds(entry.timestamp)}</time>
                   <span className="timeline-event">{entry.description}</span>
                 </div>
               </div>
