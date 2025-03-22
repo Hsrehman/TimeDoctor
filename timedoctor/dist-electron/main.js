@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-import { desktopCapturer, ipcMain, app, BrowserWindow } from "electron";
+import { desktopCapturer, BrowserWindow, ipcMain, app } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 class ActivityTracker {
@@ -66,6 +66,35 @@ class ActivityTracker {
       "music": { category: "Entertainment", score: 20 },
       "photos": { category: "Entertainment", score: 20 }
     });
+    __publicField(this, "browserPatterns", {
+      // Development & Documentation
+      "github.com": { category: "Development", score: 85 },
+      "stackoverflow.com": { category: "Development", score: 85 },
+      "developer.mozilla.org": { category: "Development", score: 90 },
+      "docs.": { category: "Development", score: 85 },
+      // Productivity & Work
+      "atlassian.": { category: "Productivity", score: 80 },
+      "trello.com": { category: "Productivity", score: 80 },
+      "asana.com": { category: "Productivity", score: 80 },
+      "notion.so": { category: "Productivity", score: 80 },
+      "google.com/docs": { category: "Productivity", score: 80 },
+      "sheets.google.com": { category: "Productivity", score: 80 },
+      "calendar.google": { category: "Productivity", score: 80 },
+      "meet.google": { category: "Communication", score: 75 },
+      // Communication
+      "gmail.com": { category: "Communication", score: 70 },
+      "outlook.": { category: "Communication", score: 70 },
+      "slack.com": { category: "Communication", score: 75 },
+      "teams.microsoft.com": { category: "Communication", score: 75 },
+      "zoom.us": { category: "Communication", score: 80 },
+      // Social Media & Entertainment
+      "facebook.com": { category: "Social Media", score: 20 },
+      "twitter.com": { category: "Social Media", score: 20 },
+      "instagram.com": { category: "Social Media", score: 15 },
+      "youtube.com": { category: "Entertainment", score: 30 },
+      "netflix.com": { category: "Entertainment", score: 10 },
+      "reddit.com": { category: "Social Media", score: 25 }
+    });
   }
   generateId() {
     return Math.random().toString(36).substr(2, 9);
@@ -91,12 +120,23 @@ class ActivityTracker {
     }
     return { category: "Other", score: 50 };
   }
+  categorizeUrl(url) {
+    const lowerUrl = url.toLowerCase();
+    for (const [pattern, value] of Object.entries(this.browserPatterns)) {
+      if (lowerUrl.includes(pattern)) {
+        return value;
+      }
+    }
+    if (lowerUrl.includes("localhost") || lowerUrl.includes("127.0.0.1") || lowerUrl.match(/:\d{4}/)) {
+      return { category: "Development", score: 90 };
+    }
+    return { category: "Browser", score: 50 };
+  }
   async trackActiveWindow() {
     if (!this.isClockIn) return;
     try {
       const sources = await desktopCapturer.getSources({
         types: ["window"],
-        // Only track windows, not the entire screen
         thumbnailSize: { width: 0, height: 0 }
       });
       const activeWindow = sources.filter((source) => {
@@ -104,20 +144,46 @@ class ActivityTracker {
       })[0];
       if (!activeWindow) return;
       const now = Date.now();
-      const { category, score } = this.categorizeApplication(
-        activeWindow.name,
-        activeWindow.name
-      );
+      const windowName = activeWindow.name;
+      let category = "Other";
+      let score = 50;
+      let url;
+      let type = "application";
+      const isBrowser = windowName.toLowerCase().match(/(chrome|firefox|safari|edge|brave|opera)/i);
+      if (isBrowser) {
+        type = "browser";
+        const allWindows = BrowserWindow.getAllWindows();
+        for (const window of allWindows) {
+          if (window.isFocused()) {
+            try {
+              url = window.webContents.getURL();
+              const urlCategory = this.categorizeUrl(url);
+              category = urlCategory.category;
+              score = urlCategory.score;
+              break;
+            } catch (error) {
+              console.error("Error getting URL:", error);
+              ({ category, score } = this.categorizeApplication(windowName, windowName));
+            }
+          }
+        }
+        if (!url) {
+          ({ category, score } = this.categorizeApplication(windowName, windowName));
+        }
+      } else {
+        ({ category, score } = this.categorizeApplication(windowName, windowName));
+      }
       const newActivity = {
         id: this.generateId(),
-        name: activeWindow.name,
-        title: activeWindow.name,
+        name: windowName,
+        title: windowName,
+        url,
         category,
         startTime: now,
-        type: "application",
+        type,
         productivityScore: score
       };
-      if (!this.currentActivity || this.currentActivity.name !== newActivity.name || this.currentActivity.title !== newActivity.title) {
+      if (!this.currentActivity || this.currentActivity.name !== newActivity.name || this.currentActivity.title !== newActivity.title || this.currentActivity.url !== newActivity.url) {
         if (this.currentActivity) {
           this.currentActivity.endTime = now;
           this.currentActivity.duration = now - this.currentActivity.startTime;

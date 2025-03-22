@@ -1,4 +1,4 @@
-import { desktopCapturer } from 'electron';
+import { desktopCapturer, BrowserWindow } from 'electron';
 
 export interface ActivityEntry {
   id: string;
@@ -91,6 +91,39 @@ export class ActivityTracker {
     'photos': { category: 'Entertainment', score: 20 },
   };
 
+  private readonly browserPatterns: { [key: string]: { category: string; score: number } } = {
+    // Development & Documentation
+    'github.com': { category: 'Development', score: 85 },
+    'stackoverflow.com': { category: 'Development', score: 85 },
+    'developer.mozilla.org': { category: 'Development', score: 90 },
+    'docs.': { category: 'Development', score: 85 },
+
+    // Productivity & Work
+    'atlassian.': { category: 'Productivity', score: 80 },
+    'trello.com': { category: 'Productivity', score: 80 },
+    'asana.com': { category: 'Productivity', score: 80 },
+    'notion.so': { category: 'Productivity', score: 80 },
+    'google.com/docs': { category: 'Productivity', score: 80 },
+    'sheets.google.com': { category: 'Productivity', score: 80 },
+    'calendar.google': { category: 'Productivity', score: 80 },
+    'meet.google': { category: 'Communication', score: 75 },
+
+    // Communication
+    'gmail.com': { category: 'Communication', score: 70 },
+    'outlook.': { category: 'Communication', score: 70 },
+    'slack.com': { category: 'Communication', score: 75 },
+    'teams.microsoft.com': { category: 'Communication', score: 75 },
+    'zoom.us': { category: 'Communication', score: 80 },
+
+    // Social Media & Entertainment
+    'facebook.com': { category: 'Social Media', score: 20 },
+    'twitter.com': { category: 'Social Media', score: 20 },
+    'instagram.com': { category: 'Social Media', score: 15 },
+    'youtube.com': { category: 'Entertainment', score: 30 },
+    'netflix.com': { category: 'Entertainment', score: 10 },
+    'reddit.com': { category: 'Social Media', score: 25 },
+  };
+
   private generateId(): string {
     return Math.random().toString(36).substr(2, 9);
   }
@@ -134,46 +167,100 @@ export class ActivityTracker {
     return { category: 'Other', score: 50 };
   }
 
+  private categorizeUrl(url: string): { category: string; score: number } {
+    const lowerUrl = url.toLowerCase();
+    
+    // Check against browser patterns
+    for (const [pattern, value] of Object.entries(this.browserPatterns)) {
+      if (lowerUrl.includes(pattern)) {
+        return value;
+      }
+    }
+
+    // Special cases for development-related URLs
+    if (lowerUrl.includes('localhost') || 
+        lowerUrl.includes('127.0.0.1') ||
+        lowerUrl.match(/:\d{4}/)) { // Common development ports
+      return { category: 'Development', score: 90 };
+    }
+
+    // Default for unknown URLs
+    return { category: 'Browser', score: 50 };
+  }
+
   async trackActiveWindow() {
     if (!this.isClockIn) return;
 
     try {
       const sources = await desktopCapturer.getSources({ 
-        types: ['window'],  // Only track windows, not the entire screen
+        types: ['window'],
         thumbnailSize: { width: 0, height: 0 }
       });
 
       // Filter out system windows and get the most recently active window
       const activeWindow = sources
         .filter(source => {
-          // Filter out system windows and generic screen captures
           return !source.name.toLowerCase().includes('entire screen') &&
                  !source.name.toLowerCase().includes('screen 1') &&
                  !source.name.toLowerCase().includes('desktop');
-        })[0];  // Get the first (most recent) window
+        })[0];
 
       if (!activeWindow) return;
 
       const now = Date.now();
-      const { category, score } = this.categorizeApplication(
-        activeWindow.name,
-        activeWindow.name
-      );
+      const windowName = activeWindow.name;
+      let category = 'Other';  // Default category
+      let score = 50;  // Default score
+      let url: string | undefined;
+      let type: 'application' | 'system' | 'browser' = 'application';
+
+      // Check if it's a browser window
+      const isBrowser = windowName.toLowerCase().match(/(chrome|firefox|safari|edge|brave|opera)/i);
+      
+      if (isBrowser) {
+        type = 'browser';
+        // Get all browser windows
+        const allWindows = BrowserWindow.getAllWindows();
+        for (const window of allWindows) {
+          if (window.isFocused()) {
+            try {
+              url = window.webContents.getURL();
+              const urlCategory = this.categorizeUrl(url);
+              category = urlCategory.category;
+              score = urlCategory.score;
+              break;
+            } catch (error) {
+              console.error('Error getting URL:', error);
+              // Fallback to default browser categorization
+              ({ category, score } = this.categorizeApplication(windowName, windowName));
+            }
+          }
+        }
+        if (!url) {
+          // Fallback if we couldn't get the URL
+          ({ category, score } = this.categorizeApplication(windowName, windowName));
+        }
+      } else {
+        // Non-browser window
+        ({ category, score } = this.categorizeApplication(windowName, windowName));
+      }
 
       const newActivity: ActivityEntry = {
         id: this.generateId(),
-        name: activeWindow.name,
-        title: activeWindow.name,
+        name: windowName,
+        title: windowName,
+        url,
         category,
         startTime: now,
-        type: 'application',
+        type,
         productivityScore: score,
       };
 
       // If there's a change in activity
       if (!this.currentActivity || 
           this.currentActivity.name !== newActivity.name || 
-          this.currentActivity.title !== newActivity.title) {
+          this.currentActivity.title !== newActivity.title ||
+          this.currentActivity.url !== newActivity.url) {
         
         if (this.currentActivity) {
           this.currentActivity.endTime = now;
